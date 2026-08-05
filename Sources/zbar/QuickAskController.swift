@@ -1,9 +1,19 @@
 import AppKit
 
-/// Quick-ask: type a question, get an answer, without leaving the current app.
+/// Quick-ask: type a question, get an answer, keep asking follow-ups — all
+/// without leaving the current app.
 @MainActor
 final class QuickAskController: PanelController, NSTextFieldDelegate {
+    /// One panel session. The thread is what gives follow-up turns their
+    /// context; the directory is scratch space for that thread.
+    private struct Conversation {
+        let root: URL
+        let threadID: String
+    }
+
     private let input = NSTextField()
+    private var conversation: Conversation?
+    private var transcript: [(question: String, answer: String)] = []
 
     override func makeHeader() -> NSView {
         input.placeholderString = "Ask zdx…"
@@ -18,14 +28,20 @@ final class QuickAskController: PanelController, NSTextFieldDelegate {
     override func focusView() -> NSView? { input }
 
     override func prepareForShow() {
+        endConversation()
         input.stringValue = ""
         setStatus(idleHint())
     }
 
+    override func hide() {
+        endConversation()
+        super.hide()
+    }
+
     override func idleHint() -> String? {
-        result == nil
+        transcript.isEmpty
             ? "⏎ ask · ⌘⏎ full session · ⎋ close"
-            : "⏎ ask again · ⌘C copy · ⌘S speak · ⎋ close"
+            : "⏎ follow up · ⌘C copy · ⌘S speak · ⎋ close"
     }
 
     override func sessionSeed() -> String? {
@@ -34,17 +50,52 @@ final class QuickAskController: PanelController, NSTextFieldDelegate {
     }
 
     override func didFinish(_ text: String) {
+        if var last = transcript.popLast() {
+            last.answer = text
+            transcript.append(last)
+        }
+        // `result` stays the latest answer, so copy and speak act on that, while
+        // the panel shows the whole exchange.
+        setResult(renderedTranscript())
         setStatus(idleHint())
-        Log.info("quick-ask answered (\(text.count) chars)")
+        Log.info("quick-ask turn \(transcript.count) answered (\(text.count) chars)")
     }
 
     private func submit() {
-        let prompt = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !prompt.isEmpty, !isBusy else { return }
+        let question = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !question.isEmpty, !isBusy else { return }
 
-        runBusy(status: "Asking zdx…") { [zdx] in
-            try await zdx.ask(prompt: prompt)
+        let session = conversation ?? startConversation()
+        transcript.append((question: question, answer: ""))
+        input.stringValue = ""
+
+        runBusy(status: transcript.count == 1 ? "Asking zdx…" : "Thinking…") { [zdx] in
+            try await zdx.ask(prompt: question, root: session.root, thread: session.threadID)
         }
+    }
+
+    private func renderedTranscript() -> String {
+        transcript
+            .map { "› \($0.question)\n\n\($0.answer)" }
+            .joined(separator: "\n\n\n")
+    }
+
+    private func startConversation() -> Conversation {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zbar-chat-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+
+        let session = Conversation(root: root, threadID: "zbar-\(UUID().uuidString)")
+        conversation = session
+        return session
+    }
+
+    private func endConversation() {
+        if let conversation {
+            try? FileManager.default.removeItem(at: conversation.root)
+        }
+        conversation = nil
+        transcript.removeAll()
     }
 
     // MARK: - NSTextFieldDelegate

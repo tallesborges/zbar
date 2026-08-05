@@ -56,23 +56,45 @@ final class ZdxClient {
         }
     }
 
-    /// Runs a one-shot prompt in a fresh temporary directory and returns the
-    /// final answer text. `--no-thread` keeps ad-hoc asks out of thread history.
+    /// Runs a prompt and returns the final answer text.
+    ///
+    /// Passing a `thread` continues that conversation; zdx replays the thread's
+    /// history, so follow-up turns keep context. Without one the turn is
+    /// isolated and nothing is persisted.
+    ///
+    /// `--no-system-prompt` matters as much as `--no-tools`: with the system
+    /// prompt in place the model is told about skills and tools it cannot
+    /// actually call, and answers by emitting invented tool-call markup instead
+    /// of the text that was asked for.
     func ask(
         prompt: String,
-        tools: Bool = false,
+        root: URL? = nil,
+        thread: String? = nil,
         model: String? = nil,
         timeout: TimeInterval = 120
     ) async throws -> String {
         guard let binary else { throw ZdxError.binaryNotFound }
 
-        let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("zbar-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: root) }
+        let scratch: URL
+        let isTemporary: Bool
+        if let root {
+            scratch = root
+            isTemporary = false
+        } else {
+            scratch = FileManager.default.temporaryDirectory
+                .appendingPathComponent("zbar-\(UUID().uuidString)", isDirectory: true)
+            try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+            isTemporary = true
+        }
+        defer { if isTemporary { try? FileManager.default.removeItem(at: scratch) } }
 
-        var arguments = ["--root", root.path, "--no-thread", "exec"]
-        if !tools { arguments.append("--no-tools") }
+        var arguments = ["--root", scratch.path]
+        if let thread {
+            arguments.append(contentsOf: ["--thread", thread])
+        } else {
+            arguments.append("--no-thread")
+        }
+        arguments.append(contentsOf: ["exec", "--no-tools", "--no-system-prompt"])
         if let model { arguments.append(contentsOf: ["-m", model]) }
         arguments.append(contentsOf: ["-p", prompt])
 

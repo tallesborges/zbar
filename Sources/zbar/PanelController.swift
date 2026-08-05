@@ -172,8 +172,7 @@ class PanelController: NSObject, NSWindowDelegate {
         if let focus = focusView() { panel.makeFirstResponder(focus) }
     }
 
-    func hide() {
-        guard panel.isVisible else { return }
+    func hide() {        guard panel.isVisible else { return }
         speech.stop()
         isSpeaking = false
         panel.orderOut(nil)
