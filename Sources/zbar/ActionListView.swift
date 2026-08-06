@@ -9,11 +9,11 @@ final class ActionListView: NSView {
 
     private(set) var selectedIndex = 0
     private var rows: [RowView] = []
+    private let stack = NSStackView()
 
-    init(actions: [TextAction]) {
+    init() {
         super.init(frame: .zero)
 
-        let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 2
@@ -26,6 +26,12 @@ final class ActionListView: NSView {
             stack.trailingAnchor.constraint(equalTo: trailingAnchor),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
+    }
+
+    /// Rebuilt on every open, so edits to the action files show up immediately.
+    func setActions(_ actions: [TextAction]) {
+        rows.forEach { $0.removeFromSuperview() }
+        rows.removeAll()
 
         for (index, action) in actions.enumerated() {
             let row = RowView(index: index, action: action)
@@ -37,7 +43,6 @@ final class ActionListView: NSView {
             stack.addArrangedSubview(row)
             row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
-
         select(0)
     }
 
@@ -89,9 +94,9 @@ private final class RowView: NSView {
         wantsLayer = true
         layer?.cornerRadius = 6
 
-        title.stringValue = "\(index + 1)  \(action.title)"
+        title.stringValue = "\(index + 1)  \(action.name)"
         title.font = .systemFont(ofSize: 14, weight: .medium)
-        subtitle.stringValue = action.subtitle
+        subtitle.stringValue = action.description
         subtitle.font = .systemFont(ofSize: 11)
 
         let stack = NSStackView(views: [title, subtitle])

@@ -18,6 +18,10 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         statusItem.menu = menu
         Log.info("zbar launched (accessibility trusted: \(SelectionService.isTrusted))")
 
+        // Seeds the action files on first run, so the folder exists to be edited
+        // without having to open the picker first.
+        Log.info("\(TextAction.loadAll().count) actions in \(TextAction.directory.path)")
+
         askHotKeyRegistered = HotKeyCenter.shared.register(.quickAsk) { [weak self] in
             self?.quickAsk.toggle()
         }

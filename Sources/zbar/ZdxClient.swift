@@ -71,6 +71,7 @@ final class ZdxClient {
         root: URL? = nil,
         thread: String? = nil,
         model: String? = nil,
+        thinkingLevel: String? = nil,
         timeout: TimeInterval = 120
     ) async throws -> String {
         guard let binary else { throw ZdxError.binaryNotFound }
@@ -96,6 +97,7 @@ final class ZdxClient {
         }
         arguments.append(contentsOf: ["exec", "--no-tools", "--no-system-prompt"])
         if let model { arguments.append(contentsOf: ["-m", model]) }
+        if let thinkingLevel { arguments.append(contentsOf: ["-t", thinkingLevel]) }
         arguments.append(contentsOf: ["-p", prompt])
 
         let result = try await Shell.run(executable: binary, arguments: arguments, timeout: timeout)

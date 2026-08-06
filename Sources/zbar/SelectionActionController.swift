@@ -4,8 +4,8 @@ import AppKit
 /// press Return to replace the original.
 @MainActor
 final class SelectionActionController: PanelController {
-    private let actions = TextAction.all
-    private lazy var list = ActionListView(actions: actions)
+    private var actions: [TextAction] = []
+    private let list = ActionListView()
 
     private var selection: String?
     private var pendingAction: TextAction?
@@ -20,7 +20,8 @@ final class SelectionActionController: PanelController {
 
     override func prepareForShow() {
         pendingAction = nil
-        list.select(0)
+        actions = TextAction.loadAll()
+        list.setActions(actions)
         setStatus(selectionSummary())
     }
 
@@ -62,6 +63,7 @@ final class SelectionActionController: PanelController {
             apply(result)
             return
         }
+        guard actions.indices.contains(list.selectedIndex) else { return }
         run(actions[list.selectedIndex])
     }
 
@@ -73,8 +75,12 @@ final class SelectionActionController: PanelController {
         guard !isBusy else { return }
 
         pendingAction = action
-        runBusy(status: "\(action.title)…") { [zdx] in
-            try await zdx.ask(prompt: action.prompt(for: selection))
+        runBusy(status: "\(action.name)…") { [zdx] in
+            try await zdx.ask(
+                prompt: action.prompt(for: selection),
+                model: action.model,
+                thinkingLevel: action.thinkingLevel
+            )
         }
     }
 
@@ -88,7 +94,7 @@ final class SelectionActionController: PanelController {
 
     override func didFinish(_ text: String) {
         setStatus(idleHint())
-        Log.info("selection action '\(pendingAction?.title ?? "?")' returned \(text.count) chars")
+        Log.info("selection action '\(pendingAction?.name ?? "?")' returned \(text.count) chars")
     }
 
     private func apply(_ text: String) {
