@@ -101,6 +101,14 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         actions.target = self
         menu.addItem(actions)
 
+        let config = NSMenuItem(
+            title: "Edit Settings…",
+            action: #selector(openSettings),
+            keyEquivalent: ""
+        )
+        config.target = self
+        menu.addItem(config)
+
         let log = NSMenuItem(title: "Open log", action: #selector(openLog), keyEquivalent: "")
         log.target = self
         menu.addItem(log)
@@ -169,6 +177,13 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         // somewhere useful rather than opening nothing.
         _ = TextAction.loadAll()
         NSWorkspace.shared.open(TextAction.directory)
+    }
+
+    @objc private func openSettings() {
+        // Re-seeds the file if it was deleted, so the item always opens
+        // something editable.
+        _ = Settings.load()
+        NSWorkspace.shared.open(Settings.file)
     }
 
     @objc private func openLog() {
