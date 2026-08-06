@@ -23,6 +23,11 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         // without having to open the picker first.
         Log.info("\(TextAction.loadAll().count) actions in \(TextAction.directory.path)")
         Log.info("shortcuts: quick ask \(settings.quickAsk.display), selection \(settings.selectionActions.display)")
+        Log.info(
+            "quick ask defaults: model \(settings.model ?? "zdx default")"
+                + ", thinking \(settings.thinking ?? "model default")"
+                + ", tools \(settings.tools ? "on" : "off")"
+        )
 
         askHotKeyRegistered = HotKeyCenter.shared.register(settings.quickAsk) { [weak self] in
             self?.quickAsk.toggle()
