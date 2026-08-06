@@ -66,12 +66,14 @@ final class ZdxClient {
     /// prompt in place the model is told about skills and tools it cannot
     /// actually call, and answers by emitting invented tool-call markup instead
     /// of the text that was asked for.
+    ///
+    /// `model` is a full zdx model spec, `provider:model[@thinking][@fast]`, so
+    /// the reasoning level travels with it and needs no separate flag.
     func ask(
         prompt: String,
         root: URL? = nil,
         thread: String? = nil,
         model: String? = nil,
-        thinkingLevel: String? = nil,
         timeout: TimeInterval = 120
     ) async throws -> String {
         guard let binary else { throw ZdxError.binaryNotFound }
@@ -97,7 +99,6 @@ final class ZdxClient {
         }
         arguments.append(contentsOf: ["exec", "--no-tools", "--no-system-prompt"])
         if let model { arguments.append(contentsOf: ["-m", model]) }
-        if let thinkingLevel { arguments.append(contentsOf: ["-t", thinkingLevel]) }
         arguments.append(contentsOf: ["-p", prompt])
 
         let result = try await Shell.run(executable: binary, arguments: arguments, timeout: timeout)

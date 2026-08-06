@@ -10,8 +10,9 @@ struct TextAction {
     let name: String
     let description: String
     let instructions: String
+    /// Model spec, `provider:model[@thinking][@fast]`. The reasoning level rides
+    /// on the spec itself, so there is no separate field for it.
     let model: String?
-    let thinkingLevel: String?
     /// Whether the result is meant to stand in for the original selection.
     let replaces: Bool
 
@@ -57,7 +58,6 @@ struct TextAction {
             description: fields["description"] ?? "",
             instructions: instructions,
             model: fields["model"],
-            thinkingLevel: fields["thinking_level"],
             replaces: fields["replaces"].map { $0 == "true" } ?? true
         )
     }
@@ -84,8 +84,7 @@ struct TextAction {
             name: \(action.name)
             description: \(action.description)
             replaces: \(action.replaces)
-            # model: openai:gpt-5-mini
-            # thinking_level: low
+            # model: claude-cli:claude-opus-5@medium
             ---
             \(action.instructions)
             """
@@ -108,7 +107,6 @@ struct TextAction {
         Reply with the corrected text only: no commentary, no quotes, no explanation.
         """,
         model: nil,
-        thinkingLevel: nil,
         replaces: true
     )
 
@@ -121,7 +119,6 @@ struct TextAction {
         Reply with the translation only: no commentary, no quotes, no explanation.
         """,
         model: nil,
-        thinkingLevel: nil,
         replaces: true
     )
 
@@ -135,7 +132,6 @@ struct TextAction {
         Portuguese glosses. Reply in Brazilian Portuguese.
         """,
         model: nil,
-        thinkingLevel: nil,
         replaces: false
     )
 }

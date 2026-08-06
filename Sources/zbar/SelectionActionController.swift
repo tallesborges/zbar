@@ -78,8 +78,7 @@ final class SelectionActionController: PanelController {
         runBusy(status: "\(action.name)…") { [zdx] in
             try await zdx.ask(
                 prompt: action.prompt(for: selection),
-                model: action.model,
-                thinkingLevel: action.thinkingLevel
+                model: action.model
             )
         }
     }
