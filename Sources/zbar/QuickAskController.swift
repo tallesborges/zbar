@@ -123,6 +123,7 @@ final class QuickAskController: PanelController, NSTextFieldDelegate {
         // `result` stays the latest answer, so copy and speak act on that, while
         // the panel shows the whole exchange.
         setResult(renderedTranscript())
+        if transcript.count > 1 { scrollResultToEnd() }
         setStatus(idleHint())
         Log.info("quick-ask turn \(transcript.count) answered (\(text.count) chars)")
     }
@@ -147,9 +148,17 @@ final class QuickAskController: PanelController, NSTextFieldDelegate {
         }
     }
 
+    /// Keep the exchange on screen while the next turn runs; the pending
+    /// question is already in the transcript, so it echoes back immediately.
+    override func displayWhileWorking() -> String? {
+        transcript.isEmpty ? nil : renderedTranscript()
+    }
+
     private func renderedTranscript() -> String {
         transcript
-            .map { "› \($0.question)\n\n\($0.answer)" }
+            .map { entry in
+                entry.answer.isEmpty ? "› \(entry.question)" : "› \(entry.question)\n\n\(entry.answer)"
+            }
             .joined(separator: "\n\n\n")
     }
 

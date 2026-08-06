@@ -213,12 +213,16 @@ class PanelController: NSObject, NSWindowDelegate {
 
     // MARK: - Work
 
+    /// What to leave on screen while a turn runs. Nil clears the result area,
+    /// which suits a panel whose previous output is about to be replaced.
+    func displayWhileWorking() -> String? { nil }
+
     /// Runs an async unit of work with spinner + status, keeping the panel from
     /// auto-dismissing while it is in flight.
     func runBusy(status: String, _ work: @escaping () async throws -> String) {
         guard !isBusy else { return }
         isBusy = true
-        setResult(nil)
+        setResult(displayWhileWorking())
         setStatus(status)
         spinner.startAnimation(nil)
         layoutPanel()
@@ -342,6 +346,12 @@ class PanelController: NSObject, NSWindowDelegate {
         separator.isHidden = false
         resultHeight.constant = measuredHeight(for: text)
         resultView.scroll(.zero)
+    }
+
+    /// Scrolls the result area to the newest content, for panels that append
+    /// rather than replace.
+    func scrollResultToEnd() {
+        resultView.scrollToEndOfDocument(nil)
     }
 
     private func measuredHeight(for text: String) -> CGFloat {
