@@ -62,10 +62,11 @@ final class ZdxClient {
     /// history, so follow-up turns keep context. Without one the turn is
     /// isolated and nothing is persisted.
     ///
-    /// `--no-system-prompt` matters as much as `--no-tools`: with the system
-    /// prompt in place the model is told about skills and tools it cannot
-    /// actually call, and answers by emitting invented tool-call markup instead
-    /// of the text that was asked for.
+    /// Tools and the system prompt travel together. Enabling tools without the
+    /// system prompt leaves the model unaware of how to use them; keeping the
+    /// system prompt without tools is worse still — it advertises skills and
+    /// tools the model cannot call, so it answers with invented tool-call markup
+    /// instead of text.
     ///
     /// `model` is a full zdx model spec, `provider:model[@thinking][@fast]`, so
     /// the reasoning level travels with it and needs no separate flag.
@@ -74,7 +75,8 @@ final class ZdxClient {
         root: URL? = nil,
         thread: String? = nil,
         model: String? = nil,
-        timeout: TimeInterval = 120
+        tools: Bool = false,
+        timeout: TimeInterval? = nil
     ) async throws -> String {
         guard let binary else { throw ZdxError.binaryNotFound }
 
@@ -97,11 +99,14 @@ final class ZdxClient {
         } else {
             arguments.append("--no-thread")
         }
-        arguments.append(contentsOf: ["exec", "--no-tools", "--no-system-prompt"])
+        arguments.append("exec")
+        if !tools { arguments.append(contentsOf: ["--no-tools", "--no-system-prompt"]) }
         if let model { arguments.append(contentsOf: ["-m", model]) }
         arguments.append(contentsOf: ["-p", prompt])
 
-        let result = try await Shell.run(executable: binary, arguments: arguments, timeout: timeout)
+        // A tool-using turn can take several round trips, so it gets more room.
+        let deadline = timeout ?? (tools ? 300 : 120)
+        let result = try await Shell.run(executable: binary, arguments: arguments, timeout: deadline)
         guard result.status == 0 else {
             throw ZdxError.failed(status: result.status, stderr: result.stderr)
         }

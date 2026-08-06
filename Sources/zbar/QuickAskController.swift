@@ -17,7 +17,15 @@ final class QuickAskController: PanelController, NSTextFieldDelegate {
 
     /// Overrides the configured default for this panel session only.
     private var model: String?
+    private var tools = false
     private var keepConversation = false
+
+    override func toggleTools() -> Bool {
+        tools.toggle()
+        setStatus(idleHint())
+        Log.info("quick-ask tools \(tools ? "enabled" : "disabled")")
+        return true
+    }
     private lazy var modelPicker: ModelPickerController = {
         let picker = ModelPickerController(zdx: zdx)
         picker.onSelect = { [weak self] chosen in
@@ -61,7 +69,9 @@ final class QuickAskController: PanelController, NSTextFieldDelegate {
         }
 
         endConversation()
-        model = Settings.load().model
+        let settings = Settings.load()
+        model = settings.model
+        tools = settings.tools
         setStatus(idleHint())
     }
 
@@ -71,10 +81,14 @@ final class QuickAskController: PanelController, NSTextFieldDelegate {
     }
 
     override func idleHint() -> String? {
-        let suffix = model.map { " · \($0)" } ?? ""
+        var state: [String] = []
+        if tools { state.append("tools on") }
+        if let model { state.append(model) }
+        let suffix = state.isEmpty ? "" : " · " + state.joined(separator: " · ")
+
         return (transcript.isEmpty
-            ? "⏎ ask · ⌘⏎ full session · ⇧⌘M model · ⎋ close"
-            : "⏎ follow up · ⌘C copy · ⌘S speak · ⇧⌘M model · ⎋ close") + suffix
+            ? "⏎ ask · ⌘⏎ session · ⇧⌘M model · ⇧⌘T tools · ⎋ close"
+            : "⏎ follow up · ⌘C copy · ⌘S speak · ⇧⌘T tools · ⎋ close") + suffix
     }
 
     override func sessionSeed() -> String? {
@@ -102,12 +116,13 @@ final class QuickAskController: PanelController, NSTextFieldDelegate {
         transcript.append((question: question, answer: ""))
         input.stringValue = ""
 
-        runBusy(status: transcript.count == 1 ? "Asking zdx…" : "Thinking…") { [zdx, model] in
+        runBusy(status: transcript.count == 1 ? "Asking zdx…" : "Thinking…") { [zdx, model, tools] in
             try await zdx.ask(
                 prompt: question,
                 root: session.root,
                 thread: session.threadID,
-                model: model
+                model: model,
+                tools: tools
             )
         }
     }

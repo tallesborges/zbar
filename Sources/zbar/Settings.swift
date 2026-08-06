@@ -10,11 +10,14 @@ struct Settings {
     var selectionActions: HotKeyCenter.Shortcut
     /// Default model for quick ask; nil uses the zdx default.
     var model: String?
+    /// Whether quick ask starts with tools and the system prompt enabled.
+    var tools: Bool
 
     static let `default` = Settings(
         quickAsk: .defaultQuickAsk,
         selectionActions: .defaultSelectionActions,
-        model: nil
+        model: nil,
+        tools: false
     )
 
     static var file: URL {
@@ -45,6 +48,7 @@ struct Settings {
             }
         }
         settings.model = fields["model"]
+        settings.tools = fields["tools"] == "true"
         return settings
     }
 
@@ -66,6 +70,10 @@ struct Settings {
         # Default model for quick ask, as provider:model[@thinking][@fast].
         # Leave unset to use the zdx default. Change it live with shift+cmd+m.
         # model: claude-cli:claude-opus-5@medium
+
+        # Give quick ask the full agent: tools, skills and memory. Slower, and it
+        # can read and write files, so it is off by default. Toggle with shift+cmd+t.
+        tools: false
         ---
         zbar settings. Only the frontmatter above is read; this text is a note to self.
         """
