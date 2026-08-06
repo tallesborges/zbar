@@ -17,7 +17,7 @@ struct Settings {
         quickAsk: .defaultQuickAsk,
         selectionActions: .defaultSelectionActions,
         model: nil,
-        tools: false
+        tools: true
     )
 
     static var file: URL {
@@ -48,7 +48,9 @@ struct Settings {
             }
         }
         settings.model = fields["model"]
-        settings.tools = fields["tools"] == "true"
+        // Only an explicit key overrides the default, so omitting it keeps
+        // tools on rather than silently turning them off.
+        if let value = fields["tools"] { settings.tools = value == "true" }
         return settings
     }
 
@@ -71,9 +73,10 @@ struct Settings {
         # Leave unset to use the zdx default. Change it live with shift+cmd+m.
         # model: claude-cli:claude-opus-5@medium
 
-        # Give quick ask the full agent: tools, skills and memory. Slower, and it
-        # can read and write files, so it is off by default. Toggle with shift+cmd+t.
-        tools: false
+        # Quick ask runs the full agent: tools, skills and memory. Set to false
+        # for plain, faster answers that cannot read or write files.
+        # Toggle for one conversation with shift+cmd+t.
+        tools: true
         ---
         zbar settings. Only the frontmatter above is read; this text is a note to self.
         """
