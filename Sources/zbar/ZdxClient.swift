@@ -62,6 +62,12 @@ final class ZdxClient {
     /// history, so follow-up turns keep context. Without one the turn is
     /// isolated and nothing is persisted.
     ///
+    /// The model zdx actually used on the last turn, read back from its output.
+    ///
+    /// Worth capturing because zbar often passes no `-m` at all, in which case
+    /// only zdx knows which model the config resolved to.
+    private(set) var lastModel: String?
+
     /// Tools and the system prompt travel together. Enabling tools without the
     /// system prompt leaves the model unaware of how to use them; keeping the
     /// system prompt without tools is worse still — it advertises skills and
@@ -115,10 +121,29 @@ final class ZdxClient {
         guard result.status == 0 else {
             throw ZdxError.failed(status: result.status, stderr: result.stderr)
         }
+        lastModel = Self.usedModel(from: result.stdout)
         guard let text = Self.finalText(from: result.stdout), !text.isEmpty else {
             throw ZdxError.noText
         }
         return text
+    }
+
+    /// `usage_update` events carry the resolved `provider` and `model`.
+    static func usedModel(from stdout: String) -> String? {
+        for line in stdout.split(separator: "\n").reversed() {
+            guard
+                let data = line.data(using: .utf8),
+                let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                object["type"] as? String == "usage_update",
+                let model = object["model"] as? String
+            else { continue }
+
+            if let provider = object["provider"] as? String, !provider.isEmpty {
+                return "\(provider):\(model)"
+            }
+            return model
+        }
+        return nil
     }
 
     /// Synthesizes `text` to an audio file and returns its path.

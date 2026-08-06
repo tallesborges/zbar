@@ -48,7 +48,6 @@ class PanelController: NSObject, NSWindowDelegate {
         panel.onSpeak = { [weak self] in self?.speakResult() ?? false }
         panel.onSession = { [weak self] in self?.openSession() ?? false }
         panel.onPickModel = { [weak self] in self?.pickModel() ?? false }
-        panel.onToggleTools = { [weak self] in self?.toggleTools() ?? false }
         panel.onPickThinking = { [weak self] in self?.pickThinking() ?? false }
 
         speech.onFinish = { [weak self] in
@@ -111,6 +110,7 @@ class PanelController: NSObject, NSWindowDelegate {
 
         statusLabel.font = .systemFont(ofSize: 11)
         statusLabel.textColor = .secondaryLabelColor
+        statusLabel.maximumNumberOfLines = 2
         statusLabel.lineBreakMode = .byTruncatingTail
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
 
@@ -246,10 +246,7 @@ class PanelController: NSObject, NSWindowDelegate {
     /// ⇧⌘M. Panels that support switching model override this.
     func pickModel() -> Bool { false }
 
-    /// ⇧⌘T. Panels that support running with tools override this.
-    func toggleTools() -> Bool { false }
-
-    /// ⇧⌘R. Panels that support choosing a reasoning level override this.
+    /// ⇧⌘T. Panels that support choosing a reasoning level override this.
     func pickThinking() -> Bool { false }
 
     /// Called after a successful run so subclasses can set their own footer hint.

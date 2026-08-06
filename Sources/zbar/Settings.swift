@@ -84,12 +84,11 @@ struct Settings {
         # model: claude-cli:claude-opus-5@medium
 
         # Reasoning level for quick ask: off, low, medium, high, xhigh, max.
-        # Leave unset to use the model default. Change it live with shift+cmd+r.
+        # Leave unset to use the model default. Change it live with shift+cmd+t.
         # thinking: medium
 
         # Quick ask runs the full agent: tools, skills and memory. Set to false
         # for plain, faster answers that cannot read or write files.
-        # Toggle for one conversation with shift+cmd+t.
         tools: true
         ---
         zbar settings. Only the frontmatter above is read; this text is a note to self.

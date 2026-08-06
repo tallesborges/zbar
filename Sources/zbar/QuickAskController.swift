@@ -27,7 +27,6 @@ final class QuickAskController: PanelController, NSTextFieldDelegate {
             guard let self else { return }
             thinking = chosen
             show()
-            setStatus("Reasoning: \(chosen ?? "default")")
         }
         return picker
     }()
@@ -39,19 +38,12 @@ final class QuickAskController: PanelController, NSTextFieldDelegate {
         return true
     }
 
-    override func toggleTools() -> Bool {
-        tools.toggle()
-        setStatus(idleHint())
-        Log.info("quick-ask tools \(tools ? "enabled" : "disabled")")
-        return true
-    }
     private lazy var modelPicker: ModelPickerController = {
         let picker = ModelPickerController(zdx: zdx)
         picker.onSelect = { [weak self] chosen in
             guard let self else { return }
             model = chosen ?? Settings.load().model
             show()
-            setStatus("Model: \(model ?? "default")")
         }
         return picker
     }()
@@ -101,15 +93,21 @@ final class QuickAskController: PanelController, NSTextFieldDelegate {
     }
 
     override func idleHint() -> String? {
-        var state: [String] = []
-        if tools { state.append("tools on") }
-        if let thinking { state.append(thinking) }
-        if let model { state.append(model) }
-        let suffix = state.isEmpty ? "" : " · " + state.joined(separator: " · ")
+        let keys = transcript.isEmpty
+            ? "⏎ ask · ⌘⏎ session · ⇧⌘M model · ⇧⌘T thinking · ⎋ close"
+            : "⏎ follow up · ⌘C copy · ⌘S speak · ⇧⌘M model · ⇧⌘T thinking · ⎋ close"
+        return keys + "\n" + configSummary()
+    }
 
-        return (transcript.isEmpty
-            ? "⏎ ask · ⌘⏎ session · ⇧⌘M model · ⇧⌘R reasoning · ⇧⌘T tools · ⎋ close"
-            : "⏎ follow up · ⌘C copy · ⌘S speak · ⇧⌘R reasoning · ⎋ close") + suffix
+    /// What this conversation is actually running with. The model prefers the
+    /// value zdx reported using, since leaving it unset is the common case and
+    /// only zdx knows what the config resolved to.
+    private func configSummary() -> String {
+        let effectiveModel = model ?? zdx.lastModel
+        var parts = [effectiveModel ?? "default model"]
+        parts.append(thinking.map { "thinking \($0)" } ?? "thinking default")
+        parts.append(tools ? "tools on" : "tools off")
+        return parts.joined(separator: "  ·  ")
     }
 
     override func sessionSeed() -> String? {
