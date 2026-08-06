@@ -39,13 +39,20 @@ extension ZdxClient {
             return []
         }
 
-        return raw.compactMap { entry in
-            guard let id = entry["id"] as? String else { return nil }
-            return ModelInfo(
-                id: id,
-                displayName: entry["display_name"] as? String ?? id,
-                provider: entry["provider"] as? String ?? ""
-            )
+        // `@fast` variants are not separate entries: a model that supports one
+        // carries it in `fast_id`. Emit both, adjacent, so the picker offers it.
+        return raw.flatMap { entry -> [ModelInfo] in
+            guard let id = entry["id"] as? String else { return [] }
+            let name = entry["display_name"] as? String ?? id
+            let provider = entry["provider"] as? String ?? ""
+
+            var variants = [ModelInfo(id: id, displayName: name, provider: provider)]
+            if let fastID = entry["fast_id"] as? String {
+                variants.append(
+                    ModelInfo(id: fastID, displayName: "\(name) (fast)", provider: provider)
+                )
+            }
+            return variants
         }
     }
 }
