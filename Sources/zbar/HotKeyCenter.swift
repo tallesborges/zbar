@@ -101,6 +101,8 @@ extension HotKeyCenter {
         let keyCode: UInt32
         let modifiers: NSEvent.ModifierFlags
         let display: String
+        /// Character AppKit uses to render this shortcut in a menu.
+        let menuKeyEquivalent: String
 
         var carbonModifiers: UInt32 {
             var value: UInt32 = 0
@@ -117,13 +119,15 @@ extension HotKeyCenter {
         static let quickAsk = Shortcut(
             keyCode: UInt32(kVK_Space),
             modifiers: [.control, .option],
-            display: "⌃⌥Space"
+            display: "⌃⌥Space",
+            menuKeyEquivalent: " "
         )
 
         static let selectionAction = Shortcut(
             keyCode: UInt32(kVK_ANSI_A),
             modifiers: [.control, .option],
-            display: "⌃⌥A"
+            display: "⌃⌥A",
+            menuKeyEquivalent: "a"
         )
     }
 }

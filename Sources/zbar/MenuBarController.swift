@@ -65,8 +65,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         let ask = NSMenuItem(title: "Quick Ask", action: #selector(openQuickAsk), keyEquivalent: "")
         ask.target = self
         ask.isEnabled = zdx.binary != nil
+        apply(HotKeyCenter.Shortcut.quickAsk, to: ask)
         menu.addItem(ask)
-        addDisabled("    \(HotKeyCenter.Shortcut.quickAsk.display)", to: menu)
 
         let selection = NSMenuItem(
             title: "Selection Actions",
@@ -75,8 +75,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         )
         selection.target = self
         selection.isEnabled = zdx.binary != nil
+        apply(HotKeyCenter.Shortcut.selectionAction, to: selection)
         menu.addItem(selection)
-        addDisabled("    \(HotKeyCenter.Shortcut.selectionAction.display)", to: menu)
 
         menu.addItem(.separator())
 
@@ -88,7 +88,6 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         session.target = self
         session.isEnabled = zdx.binary != nil
         menu.addItem(session)
-        addDisabled("    fresh temp folder · ⌘⏎ from Quick Ask", to: menu)
 
         menu.addItem(.separator())
 
@@ -109,6 +108,15 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         menu.addItem(quit)
     }
 
+    /// Shows the shortcut right-aligned, the way macOS renders menu shortcuts.
+    ///
+    /// Status-item menus are not searched for key equivalents while closed, so
+    /// this is display only and cannot double-fire against the Carbon hotkey.
+    private func apply(_ shortcut: HotKeyCenter.Shortcut, to item: NSMenuItem) {
+        item.keyEquivalent = shortcut.menuKeyEquivalent
+        item.keyEquivalentModifierMask = shortcut.modifiers
+    }
+
     private func addDisabled(_ title: String, to menu: NSMenu) {
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
         item.isEnabled = false
@@ -117,7 +125,14 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     private func statusTitle() -> String {
         guard zdx.binary != nil else { return "⚠ zdx not found" }
-        return zdx.version.map { "zdx \($0)" } ?? "zdx ready"
+        guard let version = zdx.version else { return "zdx ready" }
+
+        // `zdx --version` prints "zdx 0.8.0+build.1785934696.g4f92…"; the build
+        // metadata is noise in a menu, and the name is already in the title.
+        let number = version
+            .split(separator: " ").last
+            .map { $0.split(separator: "+").first.map(String.init) ?? String($0) }
+        return number.map { "zdx \($0)" } ?? "zdx ready"
     }
 
     // MARK: - Actions
