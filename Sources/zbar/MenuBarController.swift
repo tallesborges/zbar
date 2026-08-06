@@ -92,6 +92,14 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(.separator())
 
+        let actions = NSMenuItem(
+            title: "Edit Actions…",
+            action: #selector(openActionsFolder),
+            keyEquivalent: ""
+        )
+        actions.target = self
+        menu.addItem(actions)
+
         let log = NSMenuItem(title: "Open log", action: #selector(openLog), keyEquivalent: "")
         log.target = self
         menu.addItem(log)
@@ -137,6 +145,13 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
     @objc private func requestAccessibility() {
         SelectionService.requestTrust()
+    }
+
+    @objc private func openActionsFolder() {
+        // Re-seeds the folder if it was deleted, so the menu item always lands
+        // somewhere useful rather than opening nothing.
+        _ = TextAction.loadAll()
+        NSWorkspace.shared.open(TextAction.directory)
     }
 
     @objc private func openLog() {
