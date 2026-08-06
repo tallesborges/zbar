@@ -47,6 +47,7 @@ class PanelController: NSObject, NSWindowDelegate {
         panel.onCopy = { [weak self] in self?.copyResult() ?? false }
         panel.onSpeak = { [weak self] in self?.speakResult() ?? false }
         panel.onSession = { [weak self] in self?.openSession() ?? false }
+        panel.onPickModel = { [weak self] in self?.pickModel() ?? false }
 
         speech.onFinish = { [weak self] in
             self?.isSpeaking = false
@@ -239,6 +240,9 @@ class PanelController: NSObject, NSWindowDelegate {
             layoutPanel()
         }
     }
+
+    /// ⇧⌘M. Panels that support switching model override this.
+    func pickModel() -> Bool { false }
 
     /// Called after a successful run so subclasses can set their own footer hint.
     func didFinish(_ text: String) {}

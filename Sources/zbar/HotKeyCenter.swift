@@ -103,31 +103,5 @@ extension HotKeyCenter {
         let display: String
         /// Character AppKit uses to render this shortcut in a menu.
         let menuKeyEquivalent: String
-
-        var carbonModifiers: UInt32 {
-            var value: UInt32 = 0
-            if modifiers.contains(.control) { value |= UInt32(controlKey) }
-            if modifiers.contains(.option) { value |= UInt32(optionKey) }
-            if modifiers.contains(.shift) { value |= UInt32(shiftKey) }
-            if modifiers.contains(.command) { value |= UInt32(cmdKey) }
-            return value
-        }
-
-        /// Hardcoded for now; Polish round 2 makes this user-configurable.
-        /// ⌃⌥Space avoids the ⌘Space / ⌥Space slots that Spotlight and Raycast
-        /// usually occupy.
-        static let quickAsk = Shortcut(
-            keyCode: UInt32(kVK_Space),
-            modifiers: [.control, .option],
-            display: "⌃⌥Space",
-            menuKeyEquivalent: " "
-        )
-
-        static let selectionAction = Shortcut(
-            keyCode: UInt32(kVK_ANSI_A),
-            modifiers: [.control, .option],
-            display: "⌃⌥A",
-            menuKeyEquivalent: "a"
-        )
     }
 }

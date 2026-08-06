@@ -5,6 +5,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let menu = NSMenu()
     private let zdx = ZdxClient()
+    private let settings = Settings.load()
     private lazy var quickAsk = QuickAskController(zdx: zdx)
     private lazy var selectionAction = SelectionActionController(zdx: zdx)
 
@@ -21,11 +22,12 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         // Seeds the action files on first run, so the folder exists to be edited
         // without having to open the picker first.
         Log.info("\(TextAction.loadAll().count) actions in \(TextAction.directory.path)")
+        Log.info("shortcuts: quick ask \(settings.quickAsk.display), selection \(settings.selectionActions.display)")
 
-        askHotKeyRegistered = HotKeyCenter.shared.register(.quickAsk) { [weak self] in
+        askHotKeyRegistered = HotKeyCenter.shared.register(settings.quickAsk) { [weak self] in
             self?.quickAsk.toggle()
         }
-        selectionHotKeyRegistered = HotKeyCenter.shared.register(.selectionAction) { [weak self] in
+        selectionHotKeyRegistered = HotKeyCenter.shared.register(settings.selectionActions) { [weak self] in
             self?.selectionAction.trigger()
         }
 
@@ -65,7 +67,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         let ask = NSMenuItem(title: "Quick Ask", action: #selector(openQuickAsk), keyEquivalent: "")
         ask.target = self
         ask.isEnabled = zdx.binary != nil
-        apply(HotKeyCenter.Shortcut.quickAsk, to: ask)
+        apply(settings.quickAsk, to: ask)
         menu.addItem(ask)
 
         let selection = NSMenuItem(
@@ -75,7 +77,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         )
         selection.target = self
         selection.isEnabled = zdx.binary != nil
-        apply(HotKeyCenter.Shortcut.selectionAction, to: selection)
+        apply(settings.selectionActions, to: selection)
         menu.addItem(selection)
 
         menu.addItem(.separator())

@@ -15,6 +15,29 @@ final class QuickAskController: PanelController, NSTextFieldDelegate {
     private var conversation: Conversation?
     private var transcript: [(question: String, answer: String)] = []
 
+    /// Overrides the configured default for this panel session only.
+    private var model: String?
+    private var keepConversation = false
+    private lazy var modelPicker: ModelPickerController = {
+        let picker = ModelPickerController(zdx: zdx)
+        picker.onSelect = { [weak self] chosen in
+            guard let self else { return }
+            model = chosen ?? Settings.load().model
+            show()
+            setStatus("Model: \(model ?? "default")")
+        }
+        return picker
+    }()
+
+    override func pickModel() -> Bool {
+        // The panel is reopened after choosing, so the conversation has to
+        // survive that round trip.
+        keepConversation = true
+        panel.orderOut(nil)
+        modelPicker.show()
+        return true
+    }
+
     override func makeHeader() -> NSView {
         input.placeholderString = "Ask zdx…"
         input.font = .systemFont(ofSize: 20)
@@ -28,8 +51,17 @@ final class QuickAskController: PanelController, NSTextFieldDelegate {
     override func focusView() -> NSView? { input }
 
     override func prepareForShow() {
-        endConversation()
         input.stringValue = ""
+
+        if keepConversation {
+            keepConversation = false
+            if !transcript.isEmpty { setResult(renderedTranscript()) }
+            setStatus(idleHint())
+            return
+        }
+
+        endConversation()
+        model = Settings.load().model
         setStatus(idleHint())
     }
 
@@ -39,9 +71,10 @@ final class QuickAskController: PanelController, NSTextFieldDelegate {
     }
 
     override func idleHint() -> String? {
-        transcript.isEmpty
-            ? "⏎ ask · ⌘⏎ full session · ⎋ close"
-            : "⏎ follow up · ⌘C copy · ⌘S speak · ⎋ close"
+        let suffix = model.map { " · \($0)" } ?? ""
+        return (transcript.isEmpty
+            ? "⏎ ask · ⌘⏎ full session · ⇧⌘M model · ⎋ close"
+            : "⏎ follow up · ⌘C copy · ⌘S speak · ⇧⌘M model · ⎋ close") + suffix
     }
 
     override func sessionSeed() -> String? {
@@ -69,8 +102,13 @@ final class QuickAskController: PanelController, NSTextFieldDelegate {
         transcript.append((question: question, answer: ""))
         input.stringValue = ""
 
-        runBusy(status: transcript.count == 1 ? "Asking zdx…" : "Thinking…") { [zdx] in
-            try await zdx.ask(prompt: question, root: session.root, thread: session.threadID)
+        runBusy(status: transcript.count == 1 ? "Asking zdx…" : "Thinking…") { [zdx, model] in
+            try await zdx.ask(
+                prompt: question,
+                root: session.root,
+                thread: session.threadID,
+                model: model
+            )
         }
     }
 

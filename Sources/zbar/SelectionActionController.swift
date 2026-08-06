@@ -5,7 +5,7 @@ import AppKit
 @MainActor
 final class SelectionActionController: PanelController {
     private var actions: [TextAction] = []
-    private let list = ActionListView()
+    private let list = PickerListView()
 
     private var selection: String?
     private var pendingAction: TextAction?
@@ -21,7 +21,7 @@ final class SelectionActionController: PanelController {
     override func prepareForShow() {
         pendingAction = nil
         actions = TextAction.loadAll()
-        list.setActions(actions)
+        list.setRows(actions.map { PickerRow(title: $0.name, subtitle: $0.description) })
         setStatus(selectionSummary())
     }
 
