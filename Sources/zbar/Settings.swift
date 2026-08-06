@@ -10,6 +10,8 @@ struct Settings {
     var selectionActions: HotKeyCenter.Shortcut
     /// Default model for quick ask; nil uses the zdx default.
     var model: String?
+    /// Default reasoning level for quick ask; nil uses the model default.
+    var thinking: String?
     /// Whether quick ask starts with tools and the system prompt enabled.
     var tools: Bool
 
@@ -17,6 +19,7 @@ struct Settings {
         quickAsk: .defaultQuickAsk,
         selectionActions: .defaultSelectionActions,
         model: nil,
+        thinking: nil,
         tools: true
     )
 
@@ -48,6 +51,13 @@ struct Settings {
             }
         }
         settings.model = fields["model"]
+        if let value = fields["thinking"] {
+            if ThinkingLevel.all.contains(value) {
+                settings.thinking = value
+            } else {
+                Log.error("unknown thinking level '\(value)'; using the model default")
+            }
+        }
         // Only an explicit key overrides the default, so omitting it keeps
         // tools on rather than silently turning them off.
         if let value = fields["tools"] { settings.tools = value == "true" }
@@ -72,6 +82,10 @@ struct Settings {
         # Default model for quick ask, as provider:model[@thinking][@fast].
         # Leave unset to use the zdx default. Change it live with shift+cmd+m.
         # model: claude-cli:claude-opus-5@medium
+
+        # Reasoning level for quick ask: off, low, medium, high, xhigh, max.
+        # Leave unset to use the model default. Change it live with shift+cmd+r.
+        # thinking: medium
 
         # Quick ask runs the full agent: tools, skills and memory. Set to false
         # for plain, faster answers that cannot read or write files.

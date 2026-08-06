@@ -49,6 +49,7 @@ class PanelController: NSObject, NSWindowDelegate {
         panel.onSession = { [weak self] in self?.openSession() ?? false }
         panel.onPickModel = { [weak self] in self?.pickModel() ?? false }
         panel.onToggleTools = { [weak self] in self?.toggleTools() ?? false }
+        panel.onPickThinking = { [weak self] in self?.pickThinking() ?? false }
 
         speech.onFinish = { [weak self] in
             self?.isSpeaking = false
@@ -247,6 +248,9 @@ class PanelController: NSObject, NSWindowDelegate {
 
     /// ⇧⌘T. Panels that support running with tools override this.
     func toggleTools() -> Bool { false }
+
+    /// ⇧⌘R. Panels that support choosing a reasoning level override this.
+    func pickThinking() -> Bool { false }
 
     /// Called after a successful run so subclasses can set their own footer hint.
     func didFinish(_ text: String) {}

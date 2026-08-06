@@ -11,6 +11,7 @@ final class KeyablePanel: NSPanel {
     var onSession: (() -> Bool)?
     var onPickModel: (() -> Bool)?
     var onToggleTools: (() -> Bool)?
+    var onPickThinking: (() -> Bool)?
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
@@ -27,6 +28,7 @@ final class KeyablePanel: NSPanel {
         switch event.charactersIgnoringModifiers?.lowercased() {
         case "m" where event.modifierFlags.contains(.shift) && onPickModel?() == true: return true
         case "t" where event.modifierFlags.contains(.shift) && onToggleTools?() == true: return true
+        case "r" where event.modifierFlags.contains(.shift) && onPickThinking?() == true: return true
         case "c" where onCopy?() == true: return true
         case "s" where onSpeak?() == true: return true
         case "\r" where onSession?() == true: return true

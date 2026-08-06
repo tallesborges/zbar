@@ -75,6 +75,7 @@ final class ZdxClient {
         root: URL? = nil,
         thread: String? = nil,
         model: String? = nil,
+        thinking: String? = nil,
         tools: Bool = false,
         timeout: TimeInterval? = nil
     ) async throws -> String {
@@ -102,6 +103,10 @@ final class ZdxClient {
         arguments.append("exec")
         if !tools { arguments.append(contentsOf: ["--no-tools", "--no-system-prompt"]) }
         if let model { arguments.append(contentsOf: ["-m", model]) }
+        // `-t` rather than an `@` suffix, because a level can be chosen while
+        // the model is left at the zdx default, where there is no spec to
+        // append to. It also wins over any suffix already on the spec.
+        if let thinking { arguments.append(contentsOf: ["-t", thinking]) }
         arguments.append(contentsOf: ["-p", prompt])
 
         // A tool-using turn can take several round trips, so it gets more room.
