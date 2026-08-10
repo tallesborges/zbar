@@ -14,13 +14,18 @@ struct Settings {
     var thinking: String?
     /// Whether quick ask starts with tools and the system prompt enabled.
     var tools: Bool
+    /// Whether the skill catalogue is offered to quick ask. Off by default:
+    /// skills make a model detour into reading SKILL.md files (and delegating
+    /// to other CLIs) before answering, which a quick-ask box never wants.
+    var skills: Bool
 
     static let `default` = Settings(
         quickAsk: .defaultQuickAsk,
         selectionActions: .defaultSelectionActions,
         model: nil,
         thinking: nil,
-        tools: true
+        tools: true,
+        skills: false
     )
 
     static var file: URL {
@@ -61,6 +66,7 @@ struct Settings {
         // Only an explicit key overrides the default, so omitting it keeps
         // tools on rather than silently turning them off.
         if let value = fields["tools"] { settings.tools = value == "true" }
+        if let value = fields["skills"] { settings.skills = value == "true" }
         return settings
     }
 
@@ -87,9 +93,13 @@ struct Settings {
         # Leave unset to use the model default. Change it live with shift+cmd+t.
         # thinking: medium
 
-        # Quick ask runs the full agent: tools, skills and memory. Set to false
-        # for plain, faster answers that cannot read or write files.
+        # Quick ask runs the full agent: tools, memory and project context. Set
+        # to false for plain, faster answers that cannot read or write files.
         tools: true
+
+        # Offer the skill catalogue too. Off by default: skills send the model
+        # off reading SKILL.md files before it answers. Tools and memory stay.
+        skills: false
         ---
         zbar settings. Only the frontmatter above is read; this text is a note to self.
         """

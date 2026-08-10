@@ -76,6 +76,9 @@ final class ZdxClient {
     ///
     /// `model` is a full zdx model spec, `provider:model[@thinking][@fast]`, so
     /// the reasoning level travels with it and needs no separate flag.
+    ///
+    /// Passing `onDelta` turns on `zdx exec --stream` and reports the answer as
+    /// it is generated, each call carrying the full text so far.
     func ask(
         prompt: String,
         root: URL? = nil,
@@ -83,22 +86,13 @@ final class ZdxClient {
         model: String? = nil,
         thinking: String? = nil,
         tools: Bool = false,
-        timeout: TimeInterval? = nil
+        skills: Bool = false,
+        timeout: TimeInterval? = nil,
+        onDelta: (@MainActor @Sendable (String) -> Void)? = nil
     ) async throws -> String {
         guard let binary else { throw ZdxError.binaryNotFound }
 
-        let scratch: URL
-        let isTemporary: Bool
-        if let root {
-            scratch = root
-            isTemporary = false
-        } else {
-            scratch = FileManager.default.temporaryDirectory
-                .appendingPathComponent("zbar-\(UUID().uuidString)", isDirectory: true)
-            try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
-            isTemporary = true
-        }
-        defer { if isTemporary { try? FileManager.default.removeItem(at: scratch) } }
+        let scratch = try root ?? Self.sharedScratchRoot()
 
         var arguments = ["--root", scratch.path]
         if let thread {
@@ -107,7 +101,15 @@ final class ZdxClient {
             arguments.append("--no-thread")
         }
         arguments.append("exec")
-        if !tools { arguments.append(contentsOf: ["--no-tools", "--no-system-prompt"]) }
+        if onDelta != nil { arguments.append("--stream") }
+        if tools {
+            // Tools, memory and project context stay; only the skill catalogue
+            // goes, since it makes the model read SKILL.md files before it
+            // answers.
+            if !skills { arguments.append("--no-skills") }
+        } else {
+            arguments.append(contentsOf: ["--no-tools", "--no-system-prompt"])
+        }
         if let model { arguments.append(contentsOf: ["-m", model]) }
         // `-t` rather than an `@` suffix, because a level can be chosen while
         // the model is left at the zdx default, where there is no spec to
@@ -117,7 +119,38 @@ final class ZdxClient {
 
         // A tool-using turn can take several round trips, so it gets more room.
         let deadline = timeout ?? (tools ? 300 : 120)
-        let result = try await Shell.run(executable: binary, arguments: arguments, timeout: deadline)
+
+        let result: ShellResult
+        if let onDelta {
+            // An AsyncStream keeps the background reader's line order intact
+            // while the deltas are replayed onto the main actor.
+            let (lines, continuation) = AsyncStream<String>.makeStream()
+            let consumer = Task { @MainActor in
+                var answer = ""
+                for await line in lines {
+                    guard let delta = Self.assistantDelta(from: line) else { continue }
+                    answer += delta
+                    onDelta(answer)
+                }
+            }
+            defer { continuation.finish() }
+            do {
+                result = try await Shell.run(
+                    executable: binary,
+                    arguments: arguments,
+                    timeout: deadline,
+                    onLine: { continuation.yield($0) }
+                )
+            } catch {
+                continuation.finish()
+                await consumer.value
+                throw error
+            }
+            continuation.finish()
+            await consumer.value
+        } else {            result = try await Shell.run(executable: binary, arguments: arguments, timeout: deadline)
+        }
+
         guard result.status == 0 else {
             throw ZdxError.failed(status: result.status, stderr: result.stderr)
         }
@@ -126,6 +159,34 @@ final class ZdxClient {
             throw ZdxError.noText
         }
         return text
+    }
+
+    /// One stable scratch directory for every turn.
+    ///
+    /// The root path is printed into the `# Environment` block of the system
+    /// prompt, so a per-turn temp directory changes the prompt prefix and
+    /// throws away the provider's prompt cache on every call. Reusing one path
+    /// keeps that ~20k-token prefix cacheable.
+    private static func sharedScratchRoot() throws -> URL {
+        let caches = try FileManager.default.url(
+            for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true
+        )
+        let root = caches.appendingPathComponent("dev.zdx.zbar/scratch", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        return root
+    }
+
+    /// The same stable scratch directory, for callers that hold a session root.
+    static func scratchRoot() -> URL? { try? sharedScratchRoot() }
+
+    /// Pulls the text out of one `assistant_delta` JSONL line.
+    static func assistantDelta(from line: String) -> String? {
+        guard
+            let data = line.data(using: .utf8),
+            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            object["type"] as? String == "assistant_delta"
+        else { return nil }
+        return object["text"] as? String
     }
 
     /// `usage_update` events carry the resolved `provider` and `model`.

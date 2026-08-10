@@ -19,18 +19,80 @@ enum ShellError: LocalizedError {
 }
 
 enum Shell {
-    /// A continuation may only be resumed once, but both the termination handler
-    /// and the timeout can fire. This box holds the guard flag across the two
-    /// concurrently-executing closures.
-    private final class ResumeGuard: @unchecked Sendable {
-        var finished = false
+    /// Mutable state shared by the pipe readers, the termination handler, and
+    /// the timeout — all of which run concurrently on different queues.
+    ///
+    /// A continuation may only be resumed once, and the process can exit before
+    /// its pipes reach EOF, so completion is only signalled once all three
+    /// parts have reported in.
+    private final class RunState: @unchecked Sendable {
+        private let lock = NSLock()
+        private var finished = false
+        private var outBuffer = Data()
+        private var stdoutText = ""
+        private var stderrText = ""
+        private var stdoutClosed = false
+        private var stderrClosed = false
+        private var exitStatus: Int32?
+
+        /// Appends stdout bytes and returns any newly completed lines.
+        func appendStdout(_ data: Data) -> [String] {
+            lock.lock()
+            defer { lock.unlock() }
+            outBuffer.append(data)
+            stdoutText += String(data: data, encoding: .utf8) ?? ""
+
+            var lines: [String] = []
+            while let newline = outBuffer.firstIndex(of: UInt8(ascii: "\n")) {
+                let raw = outBuffer.subdata(in: outBuffer.startIndex..<newline)
+                outBuffer.removeSubrange(outBuffer.startIndex...newline)
+                if let line = String(data: raw, encoding: .utf8), !line.isEmpty {
+                    lines.append(line)
+                }
+            }
+            return lines
+        }
+
+        func appendStderr(_ data: Data) {
+            lock.lock()
+            defer { lock.unlock() }
+            stderrText += String(data: data, encoding: .utf8) ?? ""
+        }
+
+        func closeStdout() { lock.lock(); stdoutClosed = true; lock.unlock() }
+        func closeStderr() { lock.lock(); stderrClosed = true; lock.unlock() }
+        func setExit(_ status: Int32) { lock.lock(); exitStatus = status; lock.unlock() }
+
+        /// Returns the result exactly once, and only when the process has
+        /// exited and both pipes have hit EOF.
+        func takeResultIfComplete() -> ShellResult? {
+            lock.lock()
+            defer { lock.unlock() }
+            guard !finished, stdoutClosed, stderrClosed, let exitStatus else { return nil }
+            finished = true
+            return ShellResult(status: exitStatus, stdout: stdoutText, stderr: stderrText)
+        }
+
+        /// Claims the right to resume with a failure, if nothing else did.
+        func takeFailure() -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            if finished { return false }
+            finished = true
+            return true
+        }
     }
 
     /// Runs an executable directly (no shell), so arguments never need quoting.
+    ///
+    /// `onLine` receives each complete stdout line as it arrives, which is what
+    /// lets a caller render a streaming answer instead of waiting for exit. It
+    /// is called on a background queue, in order.
     static func run(
         executable: URL,
         arguments: [String],
-        timeout: TimeInterval = 120
+        timeout: TimeInterval = 120,
+        onLine: (@Sendable (String) -> Void)? = nil
     ) async throws -> ShellResult {
         try await withCheckedThrowingContinuation { continuation in
             let process = Process()
@@ -42,34 +104,46 @@ enum Shell {
             process.standardOutput = outPipe
             process.standardError = errPipe
 
-            let lock = NSLock()
-            let box = ResumeGuard()
-            @Sendable func finishOnce(_ body: () -> Void) {
-                lock.lock()
-                let already = box.finished
-                box.finished = true
-                lock.unlock()
-                if !already { body() }
+            let state = RunState()
+            @Sendable func finishIfComplete() {
+                if let result = state.takeResultIfComplete() {
+                    continuation.resume(returning: result)
+                }
+            }
+
+            outPipe.fileHandleForReading.readabilityHandler = { handle in
+                let data = handle.availableData
+                guard !data.isEmpty else {
+                    handle.readabilityHandler = nil
+                    state.closeStdout()
+                    finishIfComplete()
+                    return
+                }
+                for line in state.appendStdout(data) { onLine?(line) }
+            }
+
+            errPipe.fileHandleForReading.readabilityHandler = { handle in
+                let data = handle.availableData
+                guard !data.isEmpty else {
+                    handle.readabilityHandler = nil
+                    state.closeStderr()
+                    finishIfComplete()
+                    return
+                }
+                state.appendStderr(data)
             }
 
             process.terminationHandler = { proc in
-                let out = String(
-                    data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8
-                ) ?? ""
-                let err = String(
-                    data: errPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8
-                ) ?? ""
-                finishOnce {
-                    continuation.resume(
-                        returning: ShellResult(status: proc.terminationStatus, stdout: out, stderr: err)
-                    )
-                }
+                state.setExit(proc.terminationStatus)
+                finishIfComplete()
             }
 
             do {
                 try process.run()
             } catch {
-                finishOnce {
+                outPipe.fileHandleForReading.readabilityHandler = nil
+                errPipe.fileHandleForReading.readabilityHandler = nil
+                if state.takeFailure() {
                     continuation.resume(throwing: ShellError.launchFailed(error.localizedDescription))
                 }
                 return
@@ -78,7 +152,7 @@ enum Shell {
             DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
                 guard process.isRunning else { return }
                 process.terminate()
-                finishOnce {
+                if state.takeFailure() {
                     continuation.resume(throwing: ShellError.timedOut(seconds: Int(timeout)))
                 }
             }

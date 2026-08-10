@@ -19,6 +19,7 @@ final class QuickAskController: PanelController, NSTextFieldDelegate {
     private var model: String?
     private var thinking: String?
     private var tools = false
+    private var skills = false
     private var keepConversation = false
 
     private lazy var thinkingPicker: ThinkingPickerController = {
@@ -84,6 +85,7 @@ final class QuickAskController: PanelController, NSTextFieldDelegate {
         model = settings.model
         thinking = settings.thinking
         tools = settings.tools
+        skills = settings.skills
         setStatus(idleHint())
     }
 
@@ -107,6 +109,7 @@ final class QuickAskController: PanelController, NSTextFieldDelegate {
         var parts = [effectiveModel ?? "default model"]
         parts.append(thinking.map { "thinking \($0)" } ?? "thinking default")
         parts.append(tools ? "tools on" : "tools off")
+        if tools, skills { parts.append("skills on") }
         return parts.joined(separator: "  ·  ")
     }
 
@@ -136,16 +139,29 @@ final class QuickAskController: PanelController, NSTextFieldDelegate {
         transcript.append((question: question, answer: ""))
         input.stringValue = ""
 
-        runBusy(status: transcript.count == 1 ? "Asking zdx…" : "Thinking…") { [zdx, model, thinking, tools] in
+        runBusy(status: transcript.count == 1 ? "Asking zdx…" : "Thinking…") { [zdx, model, thinking, tools, skills, weak self] in
             try await zdx.ask(
                 prompt: question,
                 root: session.root,
                 thread: session.threadID,
                 model: model,
                 thinking: thinking,
-                tools: tools
+                tools: tools,
+                skills: skills,
+                onDelta: { partial in self?.showPartialAnswer(partial) }
             )
         }
+    }
+
+    /// Paints the answer as it streams in, so the panel starts filling at the
+    /// model's first token instead of staying blank until the turn completes.
+    private func showPartialAnswer(_ partial: String) {
+        guard isBusy, var pending = transcript.popLast() else { return }
+        pending.answer = partial
+        transcript.append(pending)
+        setResult(renderedTranscript())
+        scrollResultToEnd()
+        layoutPanel()
     }
 
     /// Keep the exchange on screen while the next turn runs; the pending
@@ -163,9 +179,10 @@ final class QuickAskController: PanelController, NSTextFieldDelegate {
     }
 
     private func startConversation() -> Conversation {
-        let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("zbar-chat-\(UUID().uuidString)", isDirectory: true)
-        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        // The shared scratch root, not a per-session one: its path is baked
+        // into the system prompt, so a fresh directory would cost the provider
+        // prompt cache on the first turn of every panel session.
+        let root = ZdxClient.scratchRoot() ?? FileManager.default.temporaryDirectory
 
         let session = Conversation(root: root, threadID: "zbar-\(UUID().uuidString)")
         conversation = session
@@ -173,9 +190,6 @@ final class QuickAskController: PanelController, NSTextFieldDelegate {
     }
 
     private func endConversation() {
-        if let conversation {
-            try? FileManager.default.removeItem(at: conversation.root)
-        }
         conversation = nil
         transcript.removeAll()
     }
