@@ -3,26 +3,51 @@ import AppKit
 /// Selection actions: grab the selected text, pick a preset, preview the result,
 /// press Return to replace the original.
 @MainActor
-final class SelectionActionController: PanelController {
+final class SelectionActionController: PanelController, NSTextFieldDelegate {
     private var actions: [TextAction] = []
-    private let list = PickerListView()
+    private var filtered: [TextAction] = []
+    private let search = NSTextField()
+    /// Unnumbered: digits belong to the filter field, so a leading "1" would be
+    /// a shortcut and a search term at once.
+    private let list = PickerListView(numbered: false)
 
     private var selection: String?
     private var pendingAction: TextAction?
 
     override func makeHeader() -> NSView {
+        search.placeholderString = "Filter actions…"
+        search.font = .systemFont(ofSize: 18)
+        search.isBordered = false
+        search.drawsBackground = false
+        search.focusRingType = .none
+        search.delegate = self
+
         list.onActivate = { [weak self] in self?.confirm() }
         list.onCancel = { [weak self] in self?.hide() }
-        return list
+
+        let stack = NSStackView(views: [search, list])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        search.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        list.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        return stack
     }
 
-    override func focusView() -> NSView? { list }
+    /// Focus stays in the filter field; the list is driven from there.
+    override func focusView() -> NSView? { search }
 
     override func prepareForShow() {
         pendingAction = nil
+        search.stringValue = ""
         actions = TextAction.loadAll()
-        list.setRows(actions.map { PickerRow(title: $0.name, subtitle: $0.description) })
+        applyFilter("")
         setStatus(selectionSummary())
+    }
+
+    private func applyFilter(_ query: String) {
+        filtered = actions.filter { $0.matches(query) }
+        list.setRows(filtered.map(\.row))
     }
 
     /// Entry point for the hotkey. The selection must be captured *before* the
@@ -63,8 +88,8 @@ final class SelectionActionController: PanelController {
             apply(result)
             return
         }
-        guard actions.indices.contains(list.selectedIndex) else { return }
-        run(actions[list.selectedIndex])
+        guard filtered.indices.contains(list.selectedIndex) else { return }
+        run(filtered[list.selectedIndex])
     }
 
     private func run(_ action: TextAction) {
@@ -114,6 +139,32 @@ final class SelectionActionController: PanelController {
                 status: "Could not paste into the original app — ⌘C to copy instead",
                 isError: true
             )
+        }
+    }
+
+    // MARK: - NSTextFieldDelegate
+
+    func controlTextDidChange(_ notification: Notification) {
+        applyFilter(search.stringValue)
+        layoutPanel()
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        switch selector {
+        case #selector(NSResponder.moveDown(_:)):
+            list.moveSelection(by: 1)
+            return true
+        case #selector(NSResponder.moveUp(_:)):
+            list.moveSelection(by: -1)
+            return true
+        case #selector(NSResponder.insertNewline(_:)):
+            confirm()
+            return true
+        case #selector(NSResponder.cancelOperation(_:)):
+            hide()
+            return true
+        default:
+            return false
         }
     }
 }

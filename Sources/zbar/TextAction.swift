@@ -20,6 +20,18 @@ struct TextAction {
         "\(instructions)\n\nTEXT:\n\(text)"
     }
 
+    var row: PickerRow {
+        PickerRow(title: name, subtitle: description)
+    }
+
+    /// Case-insensitive match across the fields a user would type.
+    func matches(_ query: String) -> Bool {
+        guard !query.isEmpty else { return true }
+        let haystack = "\(name) \(description)".lowercased()
+        // Every whitespace-separated term must appear, so "fix english" narrows.
+        return query.lowercased().split(separator: " ").allSatisfy { haystack.contains($0) }
+    }
+
     /// `$ZDX_HOME/zbar/actions`, falling back to `~/.zdx` when unset.
     static var directory: URL {
         let home = ProcessInfo.processInfo.environment["ZDX_HOME"].map { URL(fileURLWithPath: $0) }
