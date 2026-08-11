@@ -27,6 +27,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             "quick ask defaults: model \(settings.model ?? "zdx default")"
                 + ", thinking \(settings.thinking ?? "model default")"
                 + ", tools \(settings.tools ? "on" : "off")"
+                + ", skills \(settings.skills ? "on" : "off")"
         )
 
         askHotKeyRegistered = HotKeyCenter.shared.register(settings.quickAsk) { [weak self] in
@@ -37,6 +38,12 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         }
 
         Task { await zdx.resolve() }
+
+        // Build both panels now rather than on the first hotkey: each one loads
+        // its Markdown web view's document shell, and that is the only slow part
+        // of showing a panel.
+        _ = quickAsk
+        _ = selectionAction
     }
 
     private func configureButton() {

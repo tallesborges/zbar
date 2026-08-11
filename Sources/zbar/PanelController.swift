@@ -10,11 +10,11 @@ class PanelController: NSObject, NSWindowDelegate {
 
     private let spinner = NSProgressIndicator()
     private let statusLabel = NSTextField(labelWithString: "")
-    private let resultView = NSTextView()
-    private let resultScroll = NSScrollView()
+    private let resultView = MarkdownWebView()
     private let separator = NSBox()
     private let speech = SpeechPlayer()
     private var resultHeight: NSLayoutConstraint!
+    private var hasResult = false
     private var built = false
 
     private(set) var isBusy = false
@@ -54,6 +54,12 @@ class PanelController: NSObject, NSWindowDelegate {
             self?.isSpeaking = false
             self?.setStatus(self?.idleHint())
         }
+
+        // The web renderer is the only thing that knows how tall its laid-out
+        // content is, so the panel resizes on its report rather than guessing.
+        resultView.onHeightChange = { [weak self] height in
+            self?.applyResultHeight(height)
+        }
     }
 
     // MARK: - Subclass hooks
@@ -89,19 +95,8 @@ class PanelController: NSObject, NSWindowDelegate {
         separator.isHidden = true
         separator.translatesAutoresizingMaskIntoConstraints = false
 
-        resultView.isEditable = false
-        resultView.isSelectable = true
-        resultView.drawsBackground = false
-        resultView.font = .systemFont(ofSize: 14)
-        resultView.textContainerInset = .zero
-        resultView.textContainer?.lineFragmentPadding = 0
-
-        resultScroll.documentView = resultView
-        resultScroll.drawsBackground = false
-        resultScroll.hasVerticalScroller = true
-        resultScroll.autohidesScrollers = true
-        resultScroll.isHidden = true
-        resultScroll.translatesAutoresizingMaskIntoConstraints = false
+        resultView.isHidden = true
+        resultView.translatesAutoresizingMaskIntoConstraints = false
 
         spinner.style = .spinning
         spinner.controlSize = .small
@@ -116,12 +111,12 @@ class PanelController: NSObject, NSWindowDelegate {
 
         container.addSubview(header)
         container.addSubview(separator)
-        container.addSubview(resultScroll)
+        container.addSubview(resultView)
         container.addSubview(spinner)
         container.addSubview(statusLabel)
 
         let pad = Self.padding
-        resultHeight = resultScroll.heightAnchor.constraint(equalToConstant: 0)
+        resultHeight = resultView.heightAnchor.constraint(equalToConstant: 0)
 
         NSLayoutConstraint.activate([
             header.topAnchor.constraint(equalTo: container.topAnchor, constant: pad),
@@ -132,16 +127,16 @@ class PanelController: NSObject, NSWindowDelegate {
             separator.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             separator.trailingAnchor.constraint(equalTo: container.trailingAnchor),
 
-            resultScroll.topAnchor.constraint(equalTo: separator.bottomAnchor, constant: pad),
-            resultScroll.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: pad),
-            resultScroll.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -pad),
+            resultView.topAnchor.constraint(equalTo: separator.bottomAnchor, constant: pad),
+            resultView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: pad),
+            resultView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -pad),
             resultHeight,
 
             spinner.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: pad),
             spinner.centerYAnchor.constraint(equalTo: statusLabel.centerYAnchor),
             spinner.widthAnchor.constraint(equalToConstant: 12),
 
-            statusLabel.topAnchor.constraint(equalTo: resultScroll.bottomAnchor, constant: 10),
+            statusLabel.topAnchor.constraint(equalTo: resultView.bottomAnchor, constant: 10),
             statusLabel.leadingAnchor.constraint(equalTo: spinner.trailingAnchor, constant: 6),
             statusLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -pad),
             statusLabel.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12),
@@ -334,34 +329,36 @@ class PanelController: NSObject, NSWindowDelegate {
 
     func setResult(_ text: String?) {
         guard let text, !text.isEmpty else {
-            resultView.string = ""
-            resultScroll.isHidden = true
+            hasResult = false
+            resultView.clear()
+            resultView.isHidden = true
             separator.isHidden = true
             resultHeight.constant = 0
             return
         }
 
-        resultView.string = text
-        resultScroll.isHidden = false
+        // Streaming answers grow downward, so stay pinned to the newest text
+        // while a turn is in flight instead of snapping back to the top.
+        hasResult = true
+        resultView.render(text, stick: isBusy)
+        resultView.isHidden = false
         separator.isHidden = false
-        resultHeight.constant = measuredHeight(for: text)
-        resultView.scroll(.zero)
     }
 
     /// Scrolls the result area to the newest content, for panels that append
     /// rather than replace.
     func scrollResultToEnd() {
-        resultView.scrollToEndOfDocument(nil)
+        resultView.scrollToEnd()
     }
 
-    private func measuredHeight(for text: String) -> CGFloat {
-        let width = Self.width - Self.padding * 2
-        let bounding = (text as NSString).boundingRect(
-            with: NSSize(width: width, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [.font: resultView.font ?? .systemFont(ofSize: 14)]
-        )
-        return min(max(ceil(bounding.height) + 4, 20), Self.maxResultHeight)
+    /// Applies a height reported by the web renderer and resizes the panel to
+    /// match. Arrives asynchronously, one reflow behind the patch that caused it.
+    private func applyResultHeight(_ height: CGFloat) {
+        guard hasResult else { return }
+        let clamped = min(max(ceil(height), 20), Self.maxResultHeight)
+        guard abs(resultHeight.constant - clamped) > 0.5 else { return }
+        resultHeight.constant = clamped
+        layoutPanel()
     }
 
     func setStatus(_ text: String?, isError: Bool = false) {

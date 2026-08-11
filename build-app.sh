@@ -26,6 +26,14 @@ mkdir -p "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/zbar"
 cp "$ROOT/Config/Info.plist" "$APP/Contents/Info.plist"
 
+# SwiftPM resource bundles (highlight.js for the Markdown renderer). Bundle.module
+# resolves these through the main bundle's resource directory.
+for bundle in "$(dirname "$BIN")"/*.bundle; do
+    [ -e "$bundle" ] || continue
+    echo "▶ bundling $(basename "$bundle")"
+    cp -R "$bundle" "$APP/Contents/Resources/"
+done
+
 echo "▶ code signing"
 # A stable signing identity keeps TCC grants across rebuilds; ad-hoc signatures
 # change their cdhash every build and re-trigger every prompt. Match on the
